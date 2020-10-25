@@ -195,7 +195,7 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
         Thread[] threads = new Thread[this.p];
         int batchSize = (this.rows >= this.columns) ? (this.rows / this.p) : (this.columns / this.p);
 
-        if (this.rows > this.columns) {
+        if (this.rows >= this.columns) {
             long[][][] overlaidTopRows = this.getTopOverlaidRows(kernel.length, batchSize);
             long[][][] overlaidBottomRows = this.getBottomOverlaidRows(kernel.length, batchSize);
             for (int threadIndex = 0; threadIndex < this.p; threadIndex++) {
