@@ -5,16 +5,14 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 
 public class ParallelPrimitiveImg extends PrimitiveImg {
-    private final int p, batchSize, batchSizeReminder;
+    private final int p;
 
     public ParallelPrimitiveImg(int rows, int columns, int p) {
         super(rows, columns);
         this.p = p;
-        this.batchSize = (rows >= columns) ? (rows / p) : (columns / p);
-        this.batchSizeReminder = (rows >= columns) ? ((rows % p == 0) ? 0 : 1) : ((columns % p == 0) ? 0 : 1);
     }
 
-    private long rowMultiply(long[][] kernel, long[][] overlaidTopRows, long[][] overlaidBottomRows, int rowIndex, int columnIndex, int topLimit, int bottomLimit) {
+    private long rowMultiply(long[][] kernel, long[][] overlaidTopRows, long[][] overlaidBottomRows, int rowIndex, int columnIndex, int batchStartIndex, int batchFinishIndex) {
         long sum = 0;
         for (
                 int row = rowIndex - kernel.length / 2, kernelRow = 0;
@@ -28,13 +26,18 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
                     column++, kernelColumn++
             ) {
                 int imgColumn = this.getPureIndex(column, this.columns);
-                if (imgRow < topLimit) {
-                    sum += overlaidTopRows[topLimit - imgRow][imgColumn] * kernel[kernelRow][kernelColumn];
-                } else if (topLimit <= imgRow && imgRow < bottomLimit) {
-                    sum += this.img[imgRow][imgColumn] * kernel[kernelRow][kernelColumn];
-                } else {
-                    sum += overlaidBottomRows[imgRow - bottomLimit][imgColumn] * kernel[kernelRow][kernelColumn];
+                long value;
+                if (imgRow < batchStartIndex) {
+                    value = overlaidTopRows[overlaidTopRows.length + imgRow - batchStartIndex][imgColumn];
                 }
+                else if (batchStartIndex <= imgRow && imgRow < batchFinishIndex) {
+                    value = this.img[imgRow][imgColumn];
+                }
+                else {
+                    value = overlaidBottomRows[imgRow - batchFinishIndex][imgColumn];
+                }
+
+                sum += value * kernel[kernelRow][kernelColumn];
             }
         }
 
@@ -43,11 +46,10 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
 
     private void applyRowWise(long[][] kernel, long[][] overlaidTopRows, long[][] overlaidBottomRows, int batchStartIndex, int batchFinishIndex) {
         Deque<long[]> holder = new ArrayDeque<>(kernel.length);
-        int topLimit = batchStartIndex + kernel.length / 2 - 1, bottomLimit = batchFinishIndex - kernel.length / 2 + 1;
         for (int row = batchStartIndex; row < batchFinishIndex; row++) {
             long[] top = new long[this.columns];
             for (int column = 0; column < this.columns; column++) {
-                top[column] = this.rowMultiply(kernel, overlaidTopRows, overlaidBottomRows, row, column, topLimit, bottomLimit);
+                top[column] = this.rowMultiply(kernel, overlaidTopRows, overlaidBottomRows, row, column, batchStartIndex, batchFinishIndex);
             }
 
             if (holder.size() == kernel.length) {
@@ -58,33 +60,38 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
             holder.addLast(top);
         }
 
-        int rowsLeftIndex = kernel.length;
+        int rowsLeftIndex = batchFinishIndex - holder.size();
         while (!holder.isEmpty()) {
-            this.img[batchFinishIndex - rowsLeftIndex] = holder.getFirst();
+            this.img[rowsLeftIndex] = holder.getFirst();
             holder.removeFirst();
-            rowsLeftIndex--;
+            rowsLeftIndex++;
         }
     }
 
     @Override
     public void applyKernel(long[][] kernel) {
         Thread[] threads = new Thread[this.p];
+        int batchSize = (this.rows >= this.columns) ? (this.rows / this.p) : (this.columns / this.p);
 
         if (this.rows >= this.columns) {
-            int batchSizePerThread = this.batchSize + this.batchSizeReminder;
-            long[][][] overlaidTopRows = this.getOverlaidRows(kernel.length, kernel[0].length, 0);
-            long[][][] overlaidBottomRows = this.getOverlaidRows(kernel.length, kernel[0].length, batchSizePerThread);
+            long[][][] overlaidTopRows = this.getTopOverlaidRows(kernel.length, batchSize);
+            long[][][] overlaidBottomRows = this.getBottomOverlaidRows(kernel.length, batchSize);
             for (int threadIndex = 0; threadIndex < this.p; threadIndex++) {
                 int finalThreadIndex = threadIndex;
-//                Thread thread = new Thread(() -> {
-                int batchStart = batchSizePerThread * finalThreadIndex, batchFinish = batchSizePerThread * (finalThreadIndex + 1);
-                this.applyRowWise(kernel, overlaidTopRows[finalThreadIndex], overlaidBottomRows[finalThreadIndex], batchStart, batchFinish);
-//                });
+                Thread thread = new Thread(() -> {
+                    int batchStart = batchSize * finalThreadIndex, batchFinish = batchSize * (finalThreadIndex + 1);
+                    if (finalThreadIndex == this.p - 1) {
+                        batchFinish = this.rows;
+                    }
 
-//                thread.start();
-//                threads[threadIndex] = thread;
+                    this.applyRowWise(kernel, overlaidTopRows[finalThreadIndex], overlaidBottomRows[finalThreadIndex], batchStart, batchFinish);
+                });
+
+                thread.start();
+                threads[threadIndex] = thread;
             }
-        } else {
+        }
+        else {
             //TODO
         }
 
@@ -97,15 +104,25 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
         }
     }
 
-    private long[][][] getOverlaidRows(int kernelRows, int kernelColumns, int offset) {
-        long[][][] overlaidRows = new long[this.p][kernelRows / 2][kernelColumns];
+    private long[][][] getTopOverlaidRows(int kernelRows, int batchSize) {
+        long[][][] overlaidRows = new long[this.p][kernelRows / 2][this.columns];
         for (int threadIndex = 0; threadIndex < this.p; threadIndex++) {
-//            for (int topRow = 0, row = kernelRows / 2 - 1; row >= 0; row--, topRow++) {
-//                overlaidRows[threadIndex][topRow] = this.img[threadIndex * this.batchSize + offset + row];
-//            }
+            for (int row = threadIndex * batchSize - 1, steps = kernelRows / 2 - 1; row >= 0 && steps >= 0; row--, steps--) {
+                overlaidRows[threadIndex][steps] = this.img[row];
+            }
+        }
 
-            for (int row = 0; row < kernelRows / 2; row++) {
-                overlaidRows[threadIndex][row] = this.img[threadIndex * row + offset];
+        return overlaidRows;
+    }
+
+    private long[][][] getBottomOverlaidRows(int kernelRows, int batchSize) {
+        long[][][] overlaidRows = new long[this.p][kernelRows / 2][this.columns];
+        for (int threadIndex = 0; threadIndex < this.p; threadIndex++) {
+            for (int kernelRow = 0; kernelRow < kernelRows / 2; kernelRow++) {
+                int imgIndex = (threadIndex + 1) * batchSize + kernelRow;
+                if (0 <= imgIndex && imgIndex < this.rows) {
+                    overlaidRows[threadIndex][kernelRow] = this.img[imgIndex];
+                }
             }
         }
 

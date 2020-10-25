@@ -10,6 +10,10 @@ public abstract class PrimitiveImg implements Img<long[][]> {
         this.img = new long[rows][columns];
     }
 
+    /**
+     * Fills a MxN matrix with numbers
+     * @param numbers the list of numbers
+     */
     @Override
     public void fillImg(Integer[] numbers) {
         for (int row = 0; row < this.rows; row++) {

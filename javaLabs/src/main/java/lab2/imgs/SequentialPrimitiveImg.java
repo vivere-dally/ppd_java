@@ -8,6 +8,14 @@ public class SequentialPrimitiveImg extends PrimitiveImg {
         super(rows, columns);
     }
 
+    /**
+     * Multiplies a certain area of the original matrix with the kernel.
+     *
+     * @param kernel      kernel provided
+     * @param rowIndex    row point of start
+     * @param columnIndex column point of start
+     * @return sum of all values from the matrix multiplied with the kernel.
+     */
     private long multiply(long[][] kernel, int rowIndex, int columnIndex) {
         long sum = 0;
         for (
@@ -29,10 +37,15 @@ public class SequentialPrimitiveImg extends PrimitiveImg {
         return sum;
     }
 
+    /**
+     * Applies a mxn matrix named kernel over the private MxN matrix.
+     * The operation is done in-place without an additional matrix.
+     *
+     * @param kernel the kernel used
+     */
     @Override
     public void applyKernel(long[][] kernel) {
         Deque<long[]> holder = new ArrayDeque<>(kernel.length);
-
         for (int row = 0; row < this.rows; row++) {
             long[] top = new long[this.columns];
             for (int column = 0; column < this.columns; column++) {
@@ -40,13 +53,16 @@ public class SequentialPrimitiveImg extends PrimitiveImg {
             }
 
             if (holder.size() == kernel.length) {
+                // The row - m row is not going to be used by any other operations so it is safe to overwrite.
                 this.img[row - kernel.length] = holder.getFirst();
                 holder.removeFirst();
             }
 
+            // Save the row
             holder.addLast(top);
         }
 
+        // Overwrite all left rows.
         int rowsLeftIndex = kernel.length;
         while (!holder.isEmpty()) {
             this.img[this.rows - rowsLeftIndex] = holder.getFirst();
