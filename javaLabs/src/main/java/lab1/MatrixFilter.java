@@ -1,4 +1,4 @@
-    package lab1;
+package lab1;
 
 import lab0.Helper;
 
@@ -118,7 +118,8 @@ public class MatrixFilter {
                 if (j < this.paddingRow || this.M + this.paddingRow <= j) {
                     this.img.get(j).add(0, 0L);
                     this.img.get(j).add(this.img.get(j).size() - 1, 0L);
-                } else {
+                }
+                else {
                     this.img.get(j).add(0, paddingLeft.get(j - this.paddingRow));
                     this.img.get(j).add(this.img.get(j).size() - 1, paddingRight.get(j - this.paddingRow));
                 }
