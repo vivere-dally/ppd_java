@@ -50,7 +50,7 @@ public class MatrixFilterExtended {
         long[][] kernel = new long[this.m][this.n];
         for (int i = 0; i < this.m; i++) {
             for (int j = 0; j < this.n; j++) {
-                kernel[i][j] = i + j;
+                kernel[i][j] = 1;
             }
         }
 
