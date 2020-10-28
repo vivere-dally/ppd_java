@@ -13,6 +13,15 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
     }
 
     //region RowWise
+
+    /**
+     * Gets all the rows that are overlaid above each thread.
+     * The thread i needs some rows from the thread i - 1.
+     *
+     * @param kernelRows the number of rows in the kernel
+     * @param batchSize  the batch size
+     * @return an array of length number of threads with a matrix of dimension (kernelRows / 2, matrixColumns)
+     */
     private long[][][] getTopOverlaidRows(int kernelRows, int batchSize) {
         long[][][] overlaidRows = new long[this.p][kernelRows / 2][this.columns];
         for (int threadIndex = 0; threadIndex < this.p; threadIndex++) {
@@ -24,6 +33,14 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
         return overlaidRows;
     }
 
+    /**
+     * Gets all the rows that are overlaid below each thread.
+     * The thread i needs some rows form the thread i + 1.
+     *
+     * @param kernelRows the number of rows in the kernel
+     * @param batchSize  the batch size
+     * @return an array of length number of threads with a matrix of dimension (kernelRows / 2, matrixColumns)
+     */
     private long[][][] getBottomOverlaidRows(int kernelRows, int batchSize) {
         long[][][] overlaidRows = new long[this.p][kernelRows / 2][this.columns];
         for (int threadIndex = 0; threadIndex < this.p; threadIndex++) {
@@ -38,6 +55,19 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
         return overlaidRows;
     }
 
+    /**
+     * Given a kernel of dimensions (m, n) multiplies a part of the matrix of dimensions (m, n) starting at a given row and column.
+     * If the multiplication goes before and after the bounds of the thread batch, then it will take the values from the overlaid rows.
+     *
+     * @param kernel             the kernel used
+     * @param overlaidTopRows    overlaid top rows of the current thread
+     * @param overlaidBottomRows overlaid bottom rows of the current thread
+     * @param rowIndex           the row index of the central point
+     * @param columnIndex        the column index of the central point
+     * @param batchStartIndex    the left boundary of the thread: [batchStartIndex,...
+     * @param batchFinishIndex   the right boundary of the thread: ..., batchFinishIndex)
+     * @return the sum resulted from the kernel multiplication
+     */
     private long rowWiseMultiplication(long[][] kernel, long[][] overlaidTopRows, long[][] overlaidBottomRows, int rowIndex, int columnIndex, int batchStartIndex, int batchFinishIndex) {
         long sum = 0;
         for (
@@ -70,6 +100,16 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
         return sum;
     }
 
+    /**
+     * Applies the kernel over the given batch.
+     * It uses the strategy from the SequentialPrimitiveImg.
+     *
+     * @param kernel             the given kernel
+     * @param overlaidTopRows    overlaid top rows of the current thread
+     * @param overlaidBottomRows overlaid bottom rows of the current thread
+     * @param batchStartIndex    the left boundary of the thread: [batchStartIndex,...
+     * @param batchFinishIndex   the right boundary of the thread: ..., batchFinishIndex)
+     */
     private void applyRowWise(long[][] kernel, long[][] overlaidTopRows, long[][] overlaidBottomRows, int batchStartIndex, int batchFinishIndex) {
         Deque<long[]> holder = new ArrayDeque<>(kernel.length);
         for (int row = batchStartIndex; row < batchFinishIndex; row++) {
@@ -97,6 +137,15 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
     //endregion
 
     //region ColumnWise
+
+    /**
+     * Gets all the columns that are overlaid to the left of each thread.
+     * The thread i needs some columns from the thread i - 1.
+     *
+     * @param kernelColumns the number of columns in the kernel
+     * @param batchSize     the batch size
+     * @return an array of length number of threads with a matrix of dimension (kernelColumns/2, matrixRows)
+     */
     private long[][][] getLeftOverlaidColumns(int kernelColumns, int batchSize) {
         long[][][] overlaidColumns = new long[this.p][kernelColumns / 2][this.rows];
         for (int threadIndex = 0; threadIndex < this.p; threadIndex++) {
@@ -110,6 +159,14 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
         return overlaidColumns;
     }
 
+    /**
+     * Gets all the the columns that are overlaid to the right of each thread.
+     * The thread i needs some columns from the thread i + 1.
+     *
+     * @param kernelColumns the number of columns in the kernel
+     * @param batchSize     the batch size
+     * @return an array of length number of threads with a matrix of dimension (kernelColumns/2, matrixRows)
+     */
     private long[][][] getRightOverlaidColumns(int kernelColumns, int batchSize) {
         long[][][] overlaidColumns = new long[this.p][kernelColumns / 2][this.rows];
         for (int threadIndex = 0; threadIndex < this.p; threadIndex++) {
@@ -126,6 +183,19 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
         return overlaidColumns;
     }
 
+    /**
+     * Given a kernel of dimensions (m, n) multiplies a part of the matrix of dimensions (m, n) starting at a given row and column.
+     * If the multiplication goes before and after the bounds of the thread batch, then it will take the values from the overlaid rows.
+     *
+     * @param kernel               the kernel used
+     * @param overlaidLeftColumns  overlaid left columns of the current thread
+     * @param overlaidRightColumns overlaid right columns of the current thread
+     * @param rowIndex             the row index of the central point
+     * @param columnIndex          the column index of the central point
+     * @param batchStartIndex      the left boundary of the thread: [batchStartIndex,...
+     * @param batchFinishIndex     the right boundary of the thread: ..., batchFinishIndex)
+     * @return the sum resulted from the kernel multiplication
+     */
     private long columnWiseMultiplication(long[][] kernel, long[][] overlaidLeftColumns, long[][] overlaidRightColumns, int rowIndex, int columnIndex, int batchStartIndex, int batchFinishIndex) {
         long sum = 0;
         for (
@@ -158,12 +228,28 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
         return sum;
     }
 
+    /**
+     * Overwrites a certain column in the image
+     *
+     * @param newColumn   the new values
+     * @param columnIndex the column index
+     */
     private void overwriteColumn(long[] newColumn, int columnIndex) {
         for (int i = 0; i < this.rows; i++) {
             this.img[i][columnIndex] = newColumn[i];
         }
     }
 
+    /**
+     * Applies the kernel over the given batch.
+     * It uses the strategy from the SequentialPrimitiveImg.
+     *
+     * @param kernel               the given kernel
+     * @param overlaidLeftColumns  overlaid left columns of the current thread
+     * @param overlaidRightColumns overlaid right columns of the current thread
+     * @param batchStartIndex      the left boundary of the thread: [batchStartIndex,...
+     * @param batchFinishIndex     the right boundary of the thread: ..., batchFinishIndex)
+     */
     private void applyColumnWise(long[][] kernel, long[][] overlaidLeftColumns, long[][] overlaidRightColumns, int batchStartIndex, int batchFinishIndex) {
         Deque<long[]> holder = new ArrayDeque<>(kernel[0].length);
         for (int column = batchStartIndex; column < batchFinishIndex; column++) {
@@ -190,6 +276,12 @@ public class ParallelPrimitiveImg extends PrimitiveImg {
 
     //endregion
 
+    /**
+     * Applies the kernel over the given matrix using p threads.
+     * It splits the matrix in batches row wise or column wise depending which dimension is bigger.
+     *
+     * @param kernel the kernel used
+     */
     @Override
     public void applyKernel(long[][] kernel) {
         Thread[] threads = new Thread[this.p];

@@ -3,7 +3,6 @@ package lab2;
 import lab0.Helper;
 import lab2.imgs.ParallelPrimitiveImg;
 import lab2.imgs.SequentialPrimitiveImg;
-import org.junit.jupiter.params.aggregator.ArgumentAccessException;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,14 +42,14 @@ import java.util.Arrays;
 
 public class MatrixFilterExtended {
 
-    public MatrixFilterExtended(String[] args) {
+    public MatrixFilterExtended(String[] args) throws Exception {
         if (args.length < 6) {
             System.err.println("Need 6 arguments: N, M, n, m, p, Path." + System.lineSeparator() +
                     "NxM are the dimensions of the matrix." + System.lineSeparator() +
                     "nxm are the dimensions of the kernel." + System.lineSeparator() +
                     "p is the number of threads." + System.lineSeparator() +
                     "Path is the path where the data files are.");
-            throw new ArgumentAccessException("Bad args!");
+            throw new Exception("Bad args!");
         }
 
         int N = Integer.parseInt(args[0]);
@@ -71,7 +70,7 @@ public class MatrixFilterExtended {
         parImg.fillImg(imgNumbers);
 
         // Handle kernel
-        String kernelPath = this.createFilesIfNotExists(N * M, dir, "img_n-" + n + "_m-" + m + "_p-" + p + ".csv");
+        String kernelPath = this.createFilesIfNotExists(n * m, dir, "img_n-" + n + "_m-" + m + "_p-" + p + ".csv");
         Integer[] kernelNumbers = this.loadImg(n * m, kernelPath);
 
         SequentialPrimitiveImg kernelImg = new SequentialPrimitiveImg(m, n);
@@ -91,11 +90,11 @@ public class MatrixFilterExtended {
         System.out.println("Threads," + p);
         System.out.println("Sequential (ms)," + dur1);
         System.out.println("Parallel (ms)," + dur2);
-        System.out.println("Specification, OJDK 11");
-        System.out.println("N," + N);
-        System.out.println("M," + M);
-        System.out.println("n," + n);
-        System.out.println("m," + m);
+        System.out.println("Specification,OJDK 11");
+        System.out.println("MatrixColumns," + N);
+        System.out.println("MatrixRows," + M);
+        System.out.println("KernelColumns," + n);
+        System.out.println("KernelRows," + m);
     }
 
     private String createFilesIfNotExists(int size, String path, String fileName) {

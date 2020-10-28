@@ -3,26 +3,27 @@ plugins {
     id 'application'
 }
 
+apply plugin: "application"
+mainClassName = "Main"
+
 group 'org.ppd'
 version '1.0-SNAPSHOT'
 
+jar {
+    // Keep jar clean:
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/*.MF'
+
+    manifest {
+        attributes 'Main-Class': 'Main',
+                'Class-Path': configurations.runtime.files.collect { "lib/$it.name" }.join(' ')
+    }
+    // How-to add class path:
+    //     https://stackoverflow.com/questions/22659463/add-classpath-in-manifest-using-gradle
+    //     https://gist.github.com/simon04/6865179
+}
+
 repositories {
     mavenCentral()
-}
-
-jar {
-    manifest {
-        attributes 'Main-Class': 'Main'
-    }
-
-    from {
-        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
-    }
-}
-
-tasks.withType(Test) {
-    scanForTestClasses = false
-    include "**/*Test.class"
 }
 
 dependencies {
