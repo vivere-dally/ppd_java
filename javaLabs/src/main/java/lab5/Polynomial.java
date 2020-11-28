@@ -1,32 +1,47 @@
-package lab4;
+package lab5;
+
+import lab4.Monomial;
 
 import java.util.Objects;
+import java.util.concurrent.locks.ReentrantLock;
 
+@SuppressWarnings("DuplicatedCode")
 public class Polynomial {
     private int length;
     private MonomialNode root;
+    private final ReentrantLock lock;
 
     public Polynomial() {
         root = null;
         length = 0;
+        lock = new ReentrantLock(true);
     }
 
     public void insertMonomial(Monomial monomial) {
-        MonomialNode previous = null, current = root;
-        for (; current != null; current = current.getNext()) {
-            if (current.getMonomial().getPower() == monomial.getPower()) {
-                double coefficient = current.getMonomial().getCoefficient() + monomial.getCoefficient();
-                current.getMonomial().setCoefficient(coefficient);
-                return;
-            }
+        lock.lock();
+        MonomialNode previous = null, current = root, next;
+        lock.unlock();
+        for (; current != null; current = next) {
+            try {
+                current.lock();
+                if (current.getMonomial().getPower() == monomial.getPower()) {
+                    double coefficient = current.getMonomial().getCoefficient() + monomial.getCoefficient();
+                    current.getMonomial().setCoefficient(coefficient);
+                    return;
+                }
 
-            if (current.getMonomial().getPower() < monomial.getPower()) {
-                break;
-            }
+                if (current.getMonomial().getPower() < monomial.getPower()) {
+                    break;
+                }
 
-            previous = current;
+                previous = current;
+            } finally {
+                next = current.getNext();
+                current.unlock();
+            }
         }
 
+        lock.lock();
         MonomialNode node = new MonomialNode(monomial, null);
         if (previous == null && current == null) {
             root = node;
@@ -36,11 +51,14 @@ public class Polynomial {
             root = node;
         }
         else {
+            previous.lock();
             node.setNext(current);
             previous.setNext(node);
+            previous.unlock();
         }
 
         length++;
+        lock.unlock();
     }
 
     @Override

@@ -11,18 +11,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @SuppressWarnings("FieldCanBeLocal")
 public class PolynomialAdder {
     private String polynomialFileFormat;
-    private final Polynomial sequentialPolynomial, parallelPolynomial;
-    private final Queue<Monomial> queue;
-    private final AtomicBoolean doneReading;
+    private Polynomial sequentialPolynomial;
+    private Polynomial parallelPolynomial;
+    private Queue<Monomial> queue;
+    private AtomicBoolean doneReading;
 
     private int numberOfPolynomials, maximumNumberOfMonomials, maximumGradeOfMonomials, numberOfThreads;
     private String dir;
 
     public PolynomialAdder() {
+        init();
+    }
+
+    private void init() {
         sequentialPolynomial = new Polynomial();
         parallelPolynomial = new Polynomial();
         queue = new ArrayDeque<>();
-        doneReading = new AtomicBoolean();
+        doneReading = new AtomicBoolean(false);
     }
 
     public void execute(String[] args) throws Exception {
@@ -49,6 +54,14 @@ public class PolynomialAdder {
             if (!new File(polynomialFile).exists()) {
                 PolynomialGenerator.getInstance().generate(polynomialFile, maximumNumberOfMonomials, maximumGradeOfMonomials);
             }
+        }
+
+        // JIT optimization breaks the calculation.
+        // Do it once and redo it after.
+        {
+            sequentialExecution();
+            parallelExecution();
+            init();
         }
 
         long t1 = System.nanoTime();
@@ -87,15 +100,22 @@ public class PolynomialAdder {
         Thread[] threads = new Thread[numberOfThreads];
         for (int i = 0; i < numberOfThreads; i++) {
             threads[i] = new Thread(() -> {
-                while (true) {
+                try {
                     synchronized (queue) {
-                        if (doneReading.get() && queue.isEmpty()) {
-                            break;
-                        }
-                        else if (!queue.isEmpty()) {
-                            parallelPolynomial.insertMonomial(queue.remove());
+                        while (!doneReading.get() || !queue.isEmpty()) {
+                            if (queue.isEmpty()) {
+                                queue.wait();
+                                if (!queue.isEmpty()) {
+                                    parallelPolynomial.insertMonomial(queue.remove());
+                                }
+                            }
+                            else {
+                                parallelPolynomial.insertMonomial(queue.remove());
+                            }
                         }
                     }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             });
 
@@ -110,11 +130,16 @@ public class PolynomialAdder {
                 int power = Integer.parseInt(numbers[i + 1]);
                 synchronized (queue) {
                     queue.add(new Monomial(power, coefficient));
+                    queue.notifyAll();
                 }
             }
         }
 
         doneReading.set(true);
+        synchronized (queue) {
+            queue.notifyAll();
+        }
+
         for (Thread thread : threads) {
             thread.join();
         }
