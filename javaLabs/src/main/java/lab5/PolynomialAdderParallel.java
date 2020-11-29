@@ -57,7 +57,7 @@ public class PolynomialAdderParallel {
             }
 
             queue.add(new Monomial(true));
-            produce.signalAll();
+            produce.signal();
             lock.unlock();
         }
 
