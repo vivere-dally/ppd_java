@@ -39,9 +39,8 @@ public class PolynomialAdderParallel {
         int batchSize = numberOfPolynomials / numberOfProducers;
         for (int i = 0; i < numberOfProducers; i++) {
             final int from = i * batchSize + 1;
-            int to = (i + 1) * batchSize + 1;
-            final int finalTo = Math.min(to, numberOfPolynomials + 1);
-            producers[i] = new Thread(() -> produce(from, finalTo, path, polynomialFileFormat));
+            final int to = (i == numberOfProducers - 1) ? numberOfPolynomials + 1 : (i + 1) * batchSize + 1;
+            producers[i] = new Thread(() -> produce(from, to, path, polynomialFileFormat));
             producers[i].start();
         }
 

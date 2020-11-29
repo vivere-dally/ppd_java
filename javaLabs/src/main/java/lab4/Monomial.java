@@ -1,5 +1,7 @@
 package lab4;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 
 public class Monomial {
@@ -39,8 +41,11 @@ public class Monomial {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Monomial monomial = (Monomial) o;
-        return getPower() == monomial.getPower() &&
-                Double.compare(monomial.getCoefficient(), getCoefficient()) == 0;
+        BigDecimal aa = new BigDecimal(this.coefficient);
+        aa = aa.setScale(3, RoundingMode.DOWN);
+        BigDecimal bb = new BigDecimal(monomial.coefficient);
+        bb = bb.setScale(3, RoundingMode.DOWN);
+        return getPower() == monomial.getPower() && aa.equals(bb);
     }
 
     @Override
