@@ -7,58 +7,40 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @SuppressWarnings("DuplicatedCode")
 public class Polynomial {
-    private int length;
-    private MonomialNode root;
     private final ReentrantLock lock;
+    private MonomialNode root;
 
     public Polynomial() {
         root = null;
-        length = 0;
-        lock = new ReentrantLock(true);
+        lock = new ReentrantLock();
     }
 
     public void insertMonomial(Monomial monomial) {
         lock.lock();
-        MonomialNode previous = null, current = root, next;
-        lock.unlock();
-        for (; current != null; current = next) {
-            try {
-                current.lock();
-                if (current.getMonomial().getPower() == monomial.getPower()) {
-                    double coefficient = current.getMonomial().getCoefficient() + monomial.getCoefficient();
-                    current.getMonomial().setCoefficient(coefficient);
-                    return;
-                }
-
-                if (current.getMonomial().getPower() < monomial.getPower()) {
-                    break;
-                }
-
-                previous = current;
-            } finally {
-                next = current.getNext();
-                current.unlock();
-            }
-        }
-
-        lock.lock();
-        MonomialNode node = new MonomialNode(monomial, null);
-        if (previous == null && current == null) {
-            root = node;
-        }
-        else if (previous == null) {
-            node.setNext(root);
-            root = node;
+        if (root == null || root.getMonomial().getPower() < monomial.getPower()) {
+            root = new MonomialNode(monomial, root);
+            lock.unlock();
         }
         else {
-            previous.lock();
-            node.setNext(current);
-            previous.setNext(node);
-            previous.unlock();
-        }
+            MonomialNode current = root, temp;
+            current.lock();
+            lock.unlock();
+            while (current.getNext() != null && monomial.getPower() <= current.getNext().getMonomial().getPower()) {
+                temp = current.getNext();
+                temp.lock();
+                current.unlock();
+                current = temp;
+            }
 
-        length++;
-        lock.unlock();
+            if (current.getMonomial().getPower() == monomial.getPower()) {
+                current.getMonomial().setCoefficient(current.getMonomial().getCoefficient() + monomial.getCoefficient());
+            }
+            else {
+                current.setNext(new MonomialNode(monomial, current.getNext()));
+            }
+
+            current.unlock();
+        }
     }
 
     @Override
@@ -66,10 +48,6 @@ public class Polynomial {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Polynomial that = (Polynomial) o;
-        if (this.length != that.length) {
-            return false;
-        }
-
         MonomialNode thisCurrent, thatCurrent;
         for (
                 thisCurrent = this.root, thatCurrent = that.root;
@@ -77,6 +55,8 @@ public class Polynomial {
                 thisCurrent = thisCurrent.getNext(), thatCurrent = thatCurrent.getNext()
         ) {
             if (!thisCurrent.getMonomial().equals(thatCurrent.getMonomial())) {
+                System.out.println("Not equal here " + thisCurrent.getMonomial().getPower() + " != " + thatCurrent.getMonomial().getPower() +
+                        " || " + thisCurrent.getMonomial().getCoefficient() + " != " + thatCurrent.getMonomial().getCoefficient());
                 return false;
             }
         }
@@ -87,5 +67,15 @@ public class Polynomial {
     @Override
     public int hashCode() {
         return Objects.hash(root);
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder out = new StringBuilder();
+        for (MonomialNode node = root; node != null; node = node.getNext()) {
+            out.append(node.getMonomial().getPower()).append(" > ");
+        }
+
+        return out.toString();
     }
 }

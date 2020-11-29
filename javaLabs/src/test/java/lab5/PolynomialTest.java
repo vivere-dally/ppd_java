@@ -7,9 +7,9 @@ import org.junit.jupiter.api.Test;
 class PolynomialTest {
     private static Polynomial parallelPolynomial;
     private static Polynomial sequentialPolynomial;
-    private static final Integer numberOfThreads = 4;
+    private static final Integer numberOfThreads = 2;
 
-    private void insert(Polynomial polynomial, int from, int to) {
+    private void insert(Polynomial polynomial, int from, int to) throws InterruptedException {
         for (int i = from; i < to; i++) {
             polynomial.insertMonomial(new Monomial(i, i));
         }
@@ -23,13 +23,21 @@ class PolynomialTest {
 
     @Test
     void insertMonomial1() throws InterruptedException {
-        Thread t1 = new Thread(() -> parallelPolynomial.insertMonomial(new Monomial(1, 1)));
+        Thread t1 = new Thread(() -> {
+            parallelPolynomial.insertMonomial(new Monomial(1, 1));
+        });
         t1.start();
-        Thread t2 = new Thread(() -> parallelPolynomial.insertMonomial(new Monomial(1, 1)));
+        Thread t2 = new Thread(() -> {
+            parallelPolynomial.insertMonomial(new Monomial(1, 1));
+        });
         t2.start();
-        Thread t3 = new Thread(() -> parallelPolynomial.insertMonomial(new Monomial(1, 1)));
+        Thread t3 = new Thread(() -> {
+            parallelPolynomial.insertMonomial(new Monomial(1, 1));
+        });
         t3.start();
-        Thread t4 = new Thread(() -> parallelPolynomial.insertMonomial(new Monomial(1, 1)));
+        Thread t4 = new Thread(() -> {
+            parallelPolynomial.insertMonomial(new Monomial(1, 1));
+        });
         t4.start();
 
         t1.join();
@@ -51,8 +59,12 @@ class PolynomialTest {
             final int from = i * numberOfThreads;
             final int to = (i + 1) * numberOfThreads;
             threads[i] = new Thread(() -> {
-                insert(parallelPolynomial, from, to);
-                insert(parallelPolynomial, from, to);
+                try {
+                    insert(parallelPolynomial, from, to);
+                    insert(parallelPolynomial, from, to);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             });
 
             threads[i].start();

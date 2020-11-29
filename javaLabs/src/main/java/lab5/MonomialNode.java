@@ -12,7 +12,7 @@ public class MonomialNode {
     public MonomialNode(Monomial monomial, MonomialNode next) {
         this.monomial = monomial;
         this.next = next;
-        lock = new ReentrantLock(true);
+        this.lock = new ReentrantLock();
     }
 
     public Monomial getMonomial() {
