@@ -11,7 +11,7 @@ public class Constants {
     public static final int CLIENT_MIN_PORT = 9002;
     public static final int CLIENT_MAX_PORT = 9099;
     public static final int MAX_NUMBER_OF_SEATS_PER_TICKET = 10;
-    public static final int SERVER_RUNNING_TIME_IN_MILLISECONDS = 30000;//120000;
+    public static final int SERVER_RUNNING_TIME_IN_MILLISECONDS = 120000;
     public static final int CLIENT_REQUEST_OFFSET_IN_MILLISECONDS = 2000;
     public static final int VALIDATION_THREAD_OFFSET_IN_MILLISECONDS = 5000;
     public static final int CLIENT_WORKER_DELAY_BETWEEN_CHECKS_IN_MILLISECONDS = 1000;

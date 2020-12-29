@@ -1,4 +1,5 @@
 Manifest-Version: 1.0
 Main-Class: Main
-Class-Path: 
+Class-Path: lib/slf4j-log4j12-1.7.29.jar lib/slf4j-api-1.7.30.jar lib/lo
+ g4j-1.2.17.jar
 

@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 import static p1.client.server.utils.Constants.*;
 
 @Slf4j
-public class Client implements Runnable, Observer, Serializable {
+public class Client implements Observer, Serializable {
     private Service service;
 
     private int id;
@@ -44,7 +44,6 @@ public class Client implements Runnable, Observer, Serializable {
     }
 
     @SuppressWarnings("BusyWait")
-    @Override
     public void run() {
         this.init();
         while (this.connected) {
