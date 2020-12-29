@@ -28,26 +28,23 @@ public class ServiceProxy implements Service {
     private final String host;
     private final int port;
 
-    private final Queue<Response> responses;
-    private final ReentrantLock reentrantLock;
-    private final Condition canTake;
-
     private Observer observer;
     private Socket connection;
-
     private ObjectInputStream inputStream;
     private ObjectOutputStream outputStream;
 
-    private volatile boolean running;
+    private final Queue<Response> responses;
+    private final ReentrantLock queueLock;
+    private final Condition queueLockConditionCanTake;
+    private volatile boolean finished;
 
     public ServiceProxy(String host, int port) {
         this.host = host;
         this.port = port;
 
         this.responses = new ArrayDeque<>();
-        this.reentrantLock = new ReentrantLock(true);
-        this.canTake = this.reentrantLock.newCondition();
-        log.info("Constructor done!");
+        this.queueLock = new ReentrantLock(true);
+        this.queueLockConditionCanTake = this.queueLock.newCondition();
     }
 
     private void init() throws ServiceProxyException {
@@ -56,103 +53,68 @@ public class ServiceProxy implements Service {
             this.outputStream = new ObjectOutputStream(this.connection.getOutputStream());
             this.outputStream.flush();
             this.inputStream = new ObjectInputStream(this.connection.getInputStream());
-            this.running = true;
-            log.info("Init success!");
-            this.run();
-
+            this.finished = false;
+            this.startReader();
         } catch (IOException e) {
             throw new ServiceProxyException("Could not initialize!", e);
         }
     }
 
-    @SuppressWarnings("BusyWait")
-    private void run() {
-        Thread thread = new Thread(() -> {
-            while (this.running) {
-                try {
-//  TODO Exception in thread "Thread-6" java.lang.ClassCastException: class p1.client.server.domain.model.Seat cannot be cast to class p1.client.server.utils.networking.protocol.response.Response (p1.client.server.domain.model.Seat and p1.client.server.utils.networking.protocol.response.Response are in unnamed module of loader 'app')
-//	at p1.client.server.utils.networking.service.ServiceProxy.lambda$run$0(ServiceProxy.java:73)
-//	at java.base/java.lang.Thread.run(Thread.java:834)
-
-
-//  TODO Check for thread safety
-                    Object response = this.inputStream.readObject();
-                    if (response instanceof Notification) {
-                        log.info("New notification: {}", response);
-                        this.handleNotification((Notification) response);
-                    }
-                    else {
-
-                        log.info("New response: {}", response);
-                        try {
-                            this.reentrantLock.lock();
-                            this.responses.add((Response) response);
-                            this.canTake.signal();
-                        } finally {
-                            this.reentrantLock.unlock();
-                        }
-                    }
-                } catch (IOException | ClassNotFoundException e) {
-                    e.printStackTrace();
-                    this.stop();
-                }
-
-                try {
-                    Thread.sleep(PROXY_SERVICE_DELAY_BETWEEN_CHECKS_IN_MILLISECONDS);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-
+    private void startReader() {
+        Thread thread = new Thread(new ReaderThread());
         thread.start();
-        log.info("Started the reader thread...");
     }
 
     private void stop() {
-        this.running = false;
-        log.info("ON STOP. running {}", running);
+        this.finished = true;
         try {
+            this.queueLock.lock();
             log.info("Trying to stop...");
-            this.reentrantLock.lock();
-            this.observer.onStop();
             this.inputStream.close();
             this.outputStream.close();
             this.connection.close();
-            this.canTake.signal();
             this.observer = null;
+            this.queueLockConditionCanTake.signal();
             log.info("Stopped successfully!");
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            this.reentrantLock.unlock();
+            this.queueLock.unlock();
         }
     }
 
-    private void sendRequest(Request request) {
+    private void sendRequest(Request request) throws ServiceProxyException {
+        if (this.finished) {
+            return;
+        }
+
         try {
             log.info("Trying to send the request: {}", request);
             this.outputStream.writeObject(request);
             this.outputStream.flush();
             log.info("Request sent!");
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new ServiceProxyException("Error sending request: " + request, e);
         }
     }
 
     private Response readResponse() {
+        if (this.finished) {
+            return null;
+        }
+
         Response response = null;
         try {
-            this.reentrantLock.lock();
+            this.queueLock.lock();
             /* There is only one consumer and one producer. No reason to use while instead of if. */
-            if (this.responses.size() == 0) {
-                this.canTake.await();
+            if (this.responses.size() == 0 && !this.finished) {
+                this.queueLockConditionCanTake.await();
             }
 
             response = this.responses.remove();
         } catch (InterruptedException ignored) {
         } finally {
-            this.reentrantLock.unlock();
+            this.queueLock.unlock();
         }
 
         return response;
@@ -168,6 +130,7 @@ public class ServiceProxy implements Service {
             }
             else if (notification instanceof NotificationOnStop) {
                 log.info("Handling on stop notification...");
+                this.observer.onStop();
                 this.stop();
             }
         } catch (Exception e) {
@@ -188,6 +151,7 @@ public class ServiceProxy implements Service {
         }
         else if (response instanceof ResponseError) {
             ResponseError responseError = (ResponseError) response;
+            this.stop();
             throw new ServerException("Error when logging in!", responseError.getCause());
         }
 
@@ -220,4 +184,41 @@ public class ServiceProxy implements Service {
     }
 
 //endregion
+
+    private class ReaderThread implements Runnable {
+
+        @SuppressWarnings("BusyWait")
+        @Override
+        public void run() {
+            while (!ServiceProxy.this.finished) {
+                try {
+                    Object response = ServiceProxy.this.inputStream.readObject();
+                    if (response instanceof Notification) {
+                        log.info("New notification: {}", response);
+                        ServiceProxy.this.handleNotification((Notification) response);
+                    }
+                    else {
+
+                        log.info("New response: {}", response);
+                        try {
+                            ServiceProxy.this.queueLock.lock();
+                            ServiceProxy.this.responses.add((Response) response);
+                            ServiceProxy.this.queueLockConditionCanTake.signal();
+                        } finally {
+                            ServiceProxy.this.queueLock.unlock();
+                        }
+                    }
+                } catch (IOException | ClassNotFoundException e) {
+                    e.printStackTrace();
+                    ServiceProxy.this.stop();
+                }
+
+                try {
+                    Thread.sleep(PROXY_SERVICE_DELAY_BETWEEN_CHECKS_IN_MILLISECONDS);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
 }

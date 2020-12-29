@@ -40,7 +40,6 @@ public class ClientWorker implements Runnable, Observer {
             this.outputStream.flush();
             this.inputStream = new ObjectInputStream(connection.getInputStream());
             this.running = true;
-            log.info("Constructor done!");
         } catch (IOException e) {
             throw new ClientWorkerException("Couldn't initialize input/output streams.", e);
         }
@@ -54,11 +53,12 @@ public class ClientWorker implements Runnable, Observer {
                 Request request = (Request) this.inputStream.readObject();
                 log.info("New request: " + request.toString());
                 Response response = this.handleRequest(request);
-                log.info("Response: " + response.toString());
-                this.respond(response);
+                if (response != null) {
+                    log.info("Response: " + response.toString());
+                    this.respond(response);
+                }
             } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();
-                this.stop();
             }
 
             try {
@@ -67,12 +67,9 @@ public class ClientWorker implements Runnable, Observer {
                 e.printStackTrace();
             }
         }
-    }
 
-    private void stop() {
         try {
             log.info("Trying to stop...");
-            this.running = false;
             this.inputStream.close();
             this.outputStream.close();
             this.connection.close();
@@ -93,12 +90,17 @@ public class ClientWorker implements Runnable, Observer {
             else if (request instanceof RequestLogout) {
                 log.info("Handling the logout request...");
                 response = service.logout((RequestLogout) request);
+                this.running = false;
             }
             else if (request instanceof RequestReserveTicket) {
                 log.info("Handling the reserve ticket request...");
                 response = service.reserveTicket((RequestReserveTicket) request);
             }
         } catch (ServerException e) {
+            if (request instanceof RequestLogin) {
+                this.running = false;
+            }
+
             response = new ResponseError(e);
         }
 
@@ -122,7 +124,7 @@ public class ClientWorker implements Runnable, Observer {
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            this.stop();
+            this.running = false;
         }
 
     }

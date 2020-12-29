@@ -3,6 +3,7 @@ package p1.client.server.client;
 import lombok.extern.slf4j.Slf4j;
 import p1.client.server.domain.exception.ClientException;
 import p1.client.server.domain.exception.ServerException;
+import p1.client.server.domain.exception.ServiceProxyException;
 import p1.client.server.domain.model.Seat;
 import p1.client.server.domain.model.Spectacle;
 import p1.client.server.utils.networking.protocol.request.RequestLogin;
@@ -27,7 +28,7 @@ public class Client implements Runnable, Observer, Serializable {
     private int id;
     private List<Seat> availableSeats;
 
-    private boolean running;
+    private volatile boolean connected;
 
     public void init() throws ClientException {
         this.service = new ServiceProxy(HOST, SERVER_PORT);
@@ -35,7 +36,7 @@ public class Client implements Runnable, Observer, Serializable {
             ResponseLogin responseLogin = this.service.login(new RequestLogin(), this);
             this.id = responseLogin.getId();
             this.availableSeats = responseLogin.getSeats();
-            this.running = true;
+            this.connected = true;
             log.info("Logged in successfully!");
         } catch (ServerException e) {
             throw new ClientException("Failed on login!", e);
@@ -46,8 +47,7 @@ public class Client implements Runnable, Observer, Serializable {
     @Override
     public void run() {
         this.init();
-        while (this.running) {
-            //TODO Zombie threads
+        while (this.connected) {
             try {
                 Thread.sleep(CLIENT_REQUEST_OFFSET_IN_MILLISECONDS);
             } catch (InterruptedException e) {
@@ -61,8 +61,10 @@ public class Client implements Runnable, Observer, Serializable {
                 } catch (ServerException e) {
                     log.info("Couldn't logout...\n{}", e.getMessage());
                 } finally {
-                    this.running = false;
+                    this.connected = false;
                 }
+
+                continue;
             }
 
             Map<Spectacle, List<Seat>> map = this.availableSeats
@@ -70,7 +72,7 @@ public class Client implements Runnable, Observer, Serializable {
                     .collect(Collectors.groupingBy(Seat::getSpectacle));
 
             for (Map.Entry<Spectacle, List<Seat>> entry : map.entrySet()) {
-                int numberOfSeatsToReserve = Math.min(entry.getValue().size(), new Random().nextInt(MAX_NUMBER_OF_SEATS_PER_TICKET));
+                int numberOfSeatsToReserve = Math.min(entry.getValue().size(), 1 + new Random().nextInt(MAX_NUMBER_OF_SEATS_PER_TICKET - 1));
                 if (numberOfSeatsToReserve > 0) {
                     Collections.shuffle(entry.getValue());
                     RequestReserveTicket requestReserveTicket = new RequestReserveTicket(
@@ -88,6 +90,10 @@ public class Client implements Runnable, Observer, Serializable {
                         }
                     } catch (ServerException serverException) {
                         log.info("Reserve ticket request: {} failed!", requestReserveTicket);
+                    } catch (ServiceProxyException serviceProxyException) {
+                        log.info("Proxy exception: {}", serviceProxyException.getMessage());
+                        this.connected = false;
+                        break;
                     }
                 }
             }
@@ -97,7 +103,8 @@ public class Client implements Runnable, Observer, Serializable {
     @Override
     public void onStop() {
         log.info("Stop notification!");
-        this.running = false;
+        this.connected = false;
+        this.service = null;
     }
 
     @Override

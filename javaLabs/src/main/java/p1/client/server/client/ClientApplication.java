@@ -27,7 +27,5 @@ public class ClientApplication {
         for (int i = 0; i < numberOfClients; i++) {
             clients[i].join();
         }
-
-        System.out.println("done client");
     }
 }
